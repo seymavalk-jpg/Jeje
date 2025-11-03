@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Putra Playlist — Space Edition (Brutal)</title>
+<style>
+  :root{
+    --accent:#ff1744;
+    --bg-dark:#05060a;
+    --muted:#b0b0b0;
+    --panel:#120a0b;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial;}
+  body{
+    background: radial-gradient(circle at 20% 10%, rgba(30,8,12,0.6) 0%, rgba(6,2,6,0.85) 35%, #000 100%);
+    color:#fff; overflow:hidden;
+  }
+
+  /* full background canvases */
+  canvas.bg{ position:fixed; left:0; top:0; width:100%; height:100%; z-index:0; pointer-events:none; display:block; }
+
+  /* overlay for lightning flash */
+  .flash-overlay{
+    position:fixed; inset:0; background:rgba(255,255,255,0); pointer-events:none; mix-blend-mode:screen; z-index:6;
+    transition: background 120ms ease;
+  }
+
+  /* top-left controls: visualizer and lightning toggles */
+  .top-left{ position:fixed; left:18px; top:18px; z-index:20; display:flex; gap:10px; align-items:center; }
+  .control-btn{
+    background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.04);
+    padding:8px 12px; border-radius:28px; cursor:pointer; color:#fff; font-weight:600;
+    display:inline-flex; gap:8px; align-items:center; backdrop-filter: blur(6px); transition: transform .12s, background .12s;
+  }
+  .control-btn:hover{ transform:scale(1.05); background: rgba(255,23,68,0.12); }
+
+  /* top-right gear */
+  .top-right{ position:fixed; right:18px; top:18px; z-index:20; display:flex; gap:10px; align-items:center; }
+  .gear-btn{ width:44px; height:44px; border-radius:10px; display:grid; place-items:center; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.03); cursor:pointer; }
+
+  /* playlist cover banner */
+  .playlist-cover{
+    width:100%; height:220px; background-image: url("https://share.google/JohlxW0mGTAZd7Bks");
+    background-size:cover; background-position:center; position:relative; z-index:5; display:flex; align-items:end;
+    box-shadow:0 8px 60px rgba(0,0,0,0.7);
+  }
+  .playlist-cover::after{ content:""; position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,0.25), rgba(0,0,0,0.7)); }
+  .cover-label{ position:relative; z-index:6; padding:18px 28px; font-weight:800; letter-spacing:0.8px; font-size:18px; color:#fff; text-shadow:0 6px 20px rgba(0,0,0,0.6); }
+
+  /* main area */
+  .main{ position:relative; z-index:10; display:flex; gap:28px; padding:18px; height:calc(100vh - 220px); align-items:flex-start; }
+  .left{ width:360px; min-width:280px; display:flex; flex-direction:column; align-items:center; }
+  .cover-wrap{ position:relative; width:300px; height:300px; display:flex; align-items:center; justify-content:center; margin-bottom:10px; }
+  canvas#circle{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:1; filter:drop-shadow(0 0 28px rgba(255,23,68,0.22)); }
+  .glow{ position:absolute; width:340px; height:340px; border-radius:50%; background:radial-gradient(circle at 50% 40%, rgba(255,23,68,0.14), rgba(255,23,68,0.04) 28%, transparent 55%); z-index:0; transition:transform .18s; pointer-events:none; }
+  img.cover{ width:280px; height:280px; border-radius:18px; object-fit:cover; z-index:2; transition:transform .22s ease; box-shadow:0 16px 54px rgba(0,0,0,0.6); }
+  img.cover.play{ transform:scale(1.03); }
+
+  .wavewrap{ margin-top:12px; position:relative; display:flex; flex-direction:column; align-items:center; }
+  canvas#wave{ width:260px; height:80px; border-radius:8px; z-index:3; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.003)); filter:drop-shadow(0 6px 18px rgba(0,0,0,0.5)); }
+  canvas#brut{ position:absolute; left:0; top:0; width:260px; height:80px; pointer-events:none; z-index:4; }
+
+  .meta{ margin-top:12px; text-align:center; z-index:3; }
+  .meta .title{ font-weight:800; font-size:1.05rem; }
+  .meta .artist{ color:var(--muted); margin-top:6px; font-size:0.88rem; }
+
+  .controls{ margin-top:14px; display:flex; gap:18px; align-items:center; z-index:3; }
+  .controls button{ background:none; border:0; color:inherit; font-size:1.5rem; cursor:pointer; padding:8px; border-radius:10px; transition:transform .12s; }
+  .controls button:hover{ transform:scale(1.06); color:var(--accent); }
+
+  audio#audio{ margin-top:16px; width:100%; border-radius:8px; }
+
+  .right{ flex:1; overflow:auto; padding:12px 6px; height:calc(100vh - 260px); }
+  .small{ color:var(--muted); font-size:0.95rem; }
+
+  /* panel slide from right */
+  .panel{ position:fixed; right:-420px; top:0; width:420px; height:100vh; background:linear-gradient(180deg, rgba(18,8,10,0.98), rgba(6,2,4,0.95)); box-shadow:-12px 0 40px rgba(0,0,0,0.6); z-index:30; transition:right 420ms cubic-bezier(.2,.9,.25,1); padding:18px; overflow:auto; }
+  .panel.open{ right:0; }
+  .panel-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .track-item{ display:flex; gap:10px; align-items:center; padding:8px; border-radius:10px; cursor:pointer; transition:background .12s; }
+  .track-item:hover{ background: rgba(255,23,68,0.06); }
+  .track-item img{ width:56px; height:56px; border-radius:8px; object-fit:cover; }
+
+  /* responsive */
+  @media (max-width:900px){
+    .main{ flex-direction:column; align-items:center; height:auto; padding-bottom:40px; }
+    .panel{ width:100%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- background canvases -->
+<canvas id="starsCanvas" class="bg"></canvas>
+<canvas id="nebulaCanvas" class="bg"></canvas>
+<canvas id="meteorCanvas" class="bg"></canvas>
+<canvas id="rainCanvas" class="bg"></canvas>
+<canvas id="bgVisualizer" class="bg"></canvas>
+
+<!-- flash overlay for lightning -->
+<div class="flash-overlay" id="flashOverlay"></div>
+
+<!-- top-left controls -->
+<div class="top-left">
+  <button id="toggleViz" class="control-btn" title="Toggle Visualizer">🎚 Visualizer: OFF</button>
+  <button id="toggleLightning" class="control-btn" title="Toggle Lightning">⚡ Lightning: OFF</button>
+</div>
+
+<!-- top-right gear -->
+<div class="top-right">
+  <button id="openPanel" class="gear-btn" title="Open panel">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="#fff"><path d="M19.14,12.94a7.43,7.43,0,0,0,.05-1l2.11-1.65a.5.5,0,0,0,.12-.65l-2-3.46a.5.5,0,0,0-.6-.22l-2.49,1a7.57,7.57,0,0,0-1.72-.99L14.6,2.6a.5.5,0,0,0-.5-.4H10a.5.5,0,0,0-.5.4L8.93,5.23A7.57,7.57,0,0,0,7.2,6.22l-2.49-1a.5.5,0,0,0-.6.22l-2,3.46a.5.5,0,0,0,.12.65L3.81,11a7.43,7.43,0,0,0,0,2l-2.11,1.65a.5.5,0,0,0-.12.65l2,3.46a.5.5,0,0,0,.6.22l2.49-1a7.57,7.57,0,0,0,1.72.99L9.6,21.4a.5.5,0,0,0,.5.4h4.1a.5.5,0,0,0,.5-.4l.43-2.63a7.57,7.57,0,0,0,1.72-.99l2.49,1a.5.5,0,0,0,.6-.22l2-3.46a.5.5,0,0,0-.12-.65ZM12,15.5A3.5,3.5,0,1,1,15.5,12,3.5,3.5,0,0,1,12,15.5Z"/></svg>
+  </button>
+</div>
+
+<!-- playlist cover banner -->
+<div class="playlist-cover" role="banner">
+  <div class="cover-label">PUTRA PLAYLIST — SPACE EDITION (BRUTAL)</div>
+</div>
+
+<!-- main area -->
+<div class="main">
+  <div class="left">
+    <div class="cover-wrap">
+      <div class="glow" id="glow"></div>
+      <canvas id="circle" width="300" height="300"></canvas>
+      <img id="coverImg" class="cover" src="https://i.imgur.com/Yw7O8T8.jpeg" alt="cover">
+    </div>
+
+    <div class="wavewrap">
+      <canvas id="wave" width="260" height="80"></canvas>
+      <canvas id="brut" width="260" height="80"></canvas>
+    </div>
+
+    <div class="meta">
+      <div class="title" id="title">Di Bawah Batu Nisan Kini (DJ Versi)</div>
+      <div class="artist" id="artist">ST12 Remix</div>
+    </div>
+
+    <div class="controls" aria-label="player-controls">
+      <button onclick="prevTrack()">⏮</button>
+      <button id="playBtn" onclick="togglePlay()">▶️</button>
+      <button onclick="nextTrack()">⏭</button>
+    </div>
+
+    <audio id="audio" controls style="margin-top:12px; width:100%;"></audio>
+  </div>
+
+  <div class="right">
+    <div class="small">Klik ⚙️ (kanan atas) untuk membuka panel playlist & opsi. Gunakan tombol kiri atas untuk mengaktifkan Visualizer dan Lightning.</div>
+    <div id="quick" style="margin-top:12px"></div>
+  </div>
+</div>
+
+<!-- slide-in panel -->
+<div class="panel" id="panel" aria-hidden="true">
+  <div class="panel-head">
+    <h3 style="margin:0">Daftar Putra Playlist</h3>
+    <div><button id="closePanel" style="background:none;border:0;color:#fff;cursor:pointer;font-size:18px;padding:8px">❌</button></div>
+  </div>
+  <div class="small">Klik judul untuk memuat lagu. Tekan ❤️ untuk favorite.</div>
+  <div id="trackList" style="margin-top:12px"></div>
+</div>
+
+<script>
+/* =========================
+   Data
+   ========================= */
+const TRACKS = [
+  {id:'2HYaSzvwi4I', title:'Di Bawah Batu Nisan Kini (DJ Versi)', artist:'ST12 Remix', thumb:'https://img.youtube.com/vi/2HYaSzvwi4I/hqdefault.jpg'},
+  {id:'x9SzUoJei-U', title:'Aku Bukan Jodohnya', artist:'Unknown Artist', thumb:'https://img.youtube.com/vi/x9SzUoJei-U/hqdefault.jpg'},
+  {id:'Y76VJQ0wguc', title:'Lagu Saling Percaya', artist:'Unknown Artist', thumb:'https://img.youtube.com/vi/Y76VJQ0wguc/hqdefault.jpg'},
+  {id:'qfChwOceAgQ', title:'Lagu Injit-Injit Semut', artist:'Unknown Artist', thumb:'https://img.youtube.com/vi/qfChwOceAgQ/hqdefault.jpg'},
+  {id:'0SVaz8VWE84', title:'Selena Gomez - People You Know', artist:'Selena Gomez', thumb:'https://img.youtube.com/vi/0SVaz8VWE84/hqdefault.jpg'},
+  {id:'3RmKNGI7DMA', title:'DJ Cinta Merah Jambu', artist:'DJ Remix', thumb:'https://img.youtube.com/vi/3RmKNGI7DMA/hqdefault.jpg'},
+  {id:'GAByuluHtTI', title:'DJ Aku Dah Lupa', artist:'DJ Remix', thumb:'https://img.youtube.com/vi/GAByuluHtTI/hqdefault.jpg'},
+  {id:'XY3-8xAeqYM', title:'DJ Tabola Bale X Calon Mantu Idaman', artist:'DJ Remix', thumb:'https://img.youtube.com/vi/XY3-8xAeqYM/hqdefault.jpg'},
+  {id:'t5zEP084OVI', title:'DJ Mama Muda', artist:'DJ Remix', thumb:'https://img.youtube.com/vi/t5zEP084OVI/hqdefault.jpg'},
+  {id:'HuoU7DpLN5E', title:'DJ Tia Monika', artist:'DJ Remix', thumb:'https://img.youtube.com/vi/HuoU7DpLN5E/hqdefault.jpg'},
+  // ... (lainnya tetap)
+];
+
+/* =========================
+   Refs
+   ========================= */
+const starsCanvas = document.getElementById('starsCanvas');
+const nebulaCanvas = document.getElementById('nebulaCanvas');
+const meteorCanvas = document.getElementById('meteorCanvas');
+const rainCanvas = document.getElementById('rainCanvas');
+const bgVizCanvas = document.getElementById('bgVisualizer');
+const flashOverlay = document.getElementById('flashOverlay');
+
+const toggleVizBtn = document.getElementById('toggleViz');
+const toggleLightningBtn = document.getElementById('toggleLightning');
+
+const openPanelBtn = document.getElementById('openPanel');
+const panel = document.getElementById('panel');
+const closePanelBtn = document.getElementById('closePanel');
+const trackListEl = document.getElementById('trackList');
+const quickEl = document.getElementById('quick');
+
+const coverImg = document.getElementById('coverImg');
+const titleEl = document.getElementById('title');
+const artistEl = document.getElementById('artist');
+const playBtn = document.getElementById('playBtn');
+const audioEl = document.getElementById('audio');
+
+const circle = document.getElementById('circle');
+const circleCtx = circle.getContext('2d');
+const wave = document.getElementById('wave');
+const wctx = wave.getContext('2d');
+const brut = document.getElementById('brut');
+const bctx = brut.getContext('2d');
+const bgCtx = bgVizCanvas.getContext('2d');
+const starsCtx = starsCanvas.getContext('2d');
+const nebCtx = nebulaCanvas.getContext('2d');
+const meteorCtx = meteorCanvas.getContext('2d');
+const rainCtx = rainCanvas.getContext('2d');
+
+/* resize canvases */
+function resizeAll(){
+  const w = innerWidth, h = innerHeight;
+  [starsCanvas, nebulaCanvas, meteorCanvas, rainCanvas, bgVizCanvas].forEach(c=>{
+    c.width = w; c.height = h;
+  });
+  circle.width = circle.clientWidth; circle.height = circle.clientHeight;
+  wave.width = wave.clientWidth; wave.height = wave.clientHeight;
+  brut.width = brut.clientWidth; brut.height = brut.clientHeight;
+}
+window.addEventListener('resize', resizeAll);
+resizeAll();
+
+/* =========================
+   Background: stars & nebula
+   ========================= */
+const stars = [];
+function initStars(count=250){
+  stars.length=0;
+  for(let i=0;i<count;i++){
+    stars.push({
+      x: Math.random()*starsCanvas.width,
+      y: Math.random()*starsCanvas.height,
+      r: Math.random()*1.6,
+      alpha: 0.2 + Math.random()*0.8,
+      flick: Math.random()*0.02
+    });
+  }
+}
+initStars(260);
+
+let nebulaOffset = 0;
+function drawStars(){
+  starsCtx.clearRect(0,0,starsCanvas.width,starsCanvas.height);
+  for(const s of stars){
+    s.alpha += (Math.random()*0.02 - 0.01) * s.flick;
+    s.alpha = Math.max(0.15, Math.min(1, s.alpha));
+    starsCtx.fillStyle = `rgba(255,255,255,${s.alpha})`;
+    starsCtx.beginPath();
+    starsCtx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+    starsCtx.fill();
+  }
+}
+
+function drawNebula(){
+  nebCtx.clearRect(0,0,nebulaCanvas.width,nebulaCanvas.height);
+  nebulaOffset += 0.2;
+  const gw = nebulaCanvas.width, gh = nebulaCanvas.height;
+  const g = nebCtx.createLinearGradient(0, nebulaOffset%gh, gw, (nebulaOffset*1.5)%gh);
+  g.addColorStop(0, 'rgba(20,3,10,0.0)');
+  g.addColorStop(0.25, 'rgba(40,6,12,0.06)');
+  g.addColorStop(0.5, 'rgba(75,10,22,0.12)');
+  g.addColorStop(1, 'rgba(4,2,6,0.0)');
+  nebCtx.fillStyle = g;
+  nebCtx.fillRect(0,0,gw,gh);
+
+  // subtle moving blotches
+  for(let i=0;i<5;i++){
+    const x = (Math.sin((nebulaOffset*0.01)+i)*0.5+0.5)*gw;
+    const y = (Math.cos((nebulaOffset*0.008)+i)*0.5+0.5)*gh;
+    const rad = 120 + (i*40) + Math.abs(Math.sin(nebulaOffset*0.01+i))*180;
+    const rg = nebCtx.createRadialGradient(x,y,0,x,y,rad);
+    rg.addColorStop(0, `rgba(255,40,60,${0.02 + i*0.01})`);
+    rg.addColorStop(1, 'rgba(0,0,0,0)');
+    nebCtx.fillStyle = rg;
+    nebCtx.fillRect(x-rad,y-rad,rad*2,rad*2);
+  }
+}
+
+/* =========================
+   Meteor particles (BRUTAL mode: many fast meteors)
+   ========================= */
+const meteors = [];
+function spawnMeteor(){
+  // many meteors: random starting edge top-left to top-right, high speed
+  const w = meteorCanvas.width, h = meteorCanvas.height;
+  const startX = Math.random() * w;
+  const startY = -20 - Math.random()*h*0.2;
+  const angle = Math.PI*0.55 + (Math.random()-0.5)*0.25; // downward-right angle
+  const speed = 6 + Math.random()*12; // fast (brutal)
+  meteors.push({
+    x: startX, y: startY, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed,
+    len: 40 + Math.random()*140, life: 0, maxLife: 60 + Math.random()*60,
+    hue: 30 + Math.random()*30, alpha: 0.8 + Math.random()*0.2
+  });
+}
+
+function updateMeteors(){
+  meteorCtx.clearRect(0,0,meteorCanvas.width,meteorCanvas.height);
+  for(let i=meteors.length-1;i>=0;i--){
+    const m = meteors[i];
+    m.x += m.vx; m.y += m.vy; m.life++;
+    const grd = meteorCtx.createLinearGradient(m.x, m.y, m.x-m.vx*m.len, m.y-m.vy*m.len);
+    grd.addColorStop(0, `rgba(255,255,255,${m.alpha})`);
+    grd.addColorStop(0.6, `rgba(255,200,120,${m.alpha*0.7})`);
+    grd.addColorStop(1, `rgba(255,120,40,0)`);
+    meteorCtx.strokeStyle = grd; meteorCtx.lineWidth = 2;
+    meteorCtx.beginPath();
+    meteorCtx.moveTo(m.x, m.y);
+    meteorCtx.lineTo(m.x - m.vx*m.len*0.02, m.y - m.vy*m.len*0.02);
+    meteorCtx.stroke();
+
+    // small glow
+    meteorCtx.fillStyle = `rgba(255,220,160,${m.alpha*0.08})`;
+    meteorCtx.beginPath(); meteorCtx.arc(m.x - m.vx*6, m.y - m.vy*6, 6, 0, Math.PI*2); meteorCtx.fill();
+
+    if (m.x > meteorCanvas.width+50 || m.y > meteorCanvas.height+50 || m.life > m.maxLife) meteors.splice(i,1);
+  }
+}
+
+/* spawn meteors frequently for brutal mode */
+let meteorSpawnTimer = 0;
+function meteorSpawner(){
+  meteorSpawnTimer++;
+  // spawn clusters, frequent
+  if (meteorSpawnTimer % 4 === 0) {
+    const spawnCount = 1 + Math.floor(Math.random()*3); // 1-3 each frame occasionally
+    for(let i=0;i<spawnCount;i++) spawnMeteor();
+  }
+}
+
+/* =========================
+   Rain (background) - kept subtle in space
+   ========================= */
+const drops = [];
+function initRain(count=70){
+  drops.length = 0;
+  for(let i=0;i<count;i++){
+    drops.push({
+      x: Math.random()*rainCanvas.width,
+      y: Math.random()*rainCanvas.height,
+      l: 6 + Math.random()*24,
+      v: 2 + Math.random()*6,
+      a: 0.06 + Math.random()*0.18
+    });
+  }
+}
+initRain(70);
+
+function drawRain(){
+  rainCtx.clearRect(0,0,rainCanvas.width,rainCanvas.height);
+  rainCtx.lineWidth = 1;
+  for(const d of drops){
+    rainCtx.strokeStyle = `rgba(200,220,255,${d.a})`;
+    rainCtx.beginPath();
+    rainCtx.moveTo(d.x, d.y);
+    rainCtx.lineTo(d.x + 3, d.y + d.l);
+    rainCtx.stroke();
+    d.x += 0.6; d.y += d.v;
+    if (d.y > rainCanvas.height + 20) { d.y = -40; d.x = Math.random()*rainCanvas.width; }
+  }
+}
+
+/* =========================
+   Lightning effect toggled on/off
+   ========================= */
+let lightningEnabled = false;
+let lightningCooldown = 0;
+function maybeLightning(){
+  if (!lightningEnabled) return;
+  // random chance to trigger bolt when enabled; in brutal mode make it more frequent
+  if (Math.random() < 0.008 || (Math.random() < 0.035 && Math.random() < 0.06)){
+    spikeFlash();
+  }
+  // produce occasional quick strobe cluster sometimes
+  if (Math.random() < 0.001) multiFlashBurst();
+}
+
+function spikeFlash(){
+  // quick strong flash + subtle glow on globe
+  flashOverlay.style.transition = 'background 60ms linear';
+  flashOverlay.style.background = 'rgba(255,255,255,0.55)';
+  setTimeout(()=>{ flashOverlay.style.background = 'rgba(255,255,255,0.0)'; }, 80);
+  // small nebula intensify - draw handled in drawNebula via animation param
+  // optionally add CPU-friendly localized lightning lines on meteor canvas:
+  drawLightningBolt();
+}
+
+function multiFlashBurst(){
+  // series of quick flashes
+  spikeFlash();
+  setTimeout(spikeFlash, 90 + Math.random()*120);
+  setTimeout(spikeFlash, 250 + Math.random()*200);
+}
+
+/* simple lightning bolt renderer (decorative) */
+function drawLightningBolt(){
+  const ctx = meteorCtx;
+  const W = meteorCanvas.width, H = meteorCanvas.height;
+  const startX = Math.random()*W*0.8 + W*0.05;
+  let x = startX, y = -10;
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x,y);
+  for(let i=0;i<12;i++){
+    const nx = x + (Math.random()-0.5)*60;
+    const ny = y + (20 + Math.random()*40);
+    ctx.lineTo(nx, ny);
+    x = nx; y = ny;
+  }
+  ctx.stroke();
+
+  // fading overlay for bolt
+  setTimeout(()=>{ // clear the bolt trace gently
+    meteorCtx.clearRect(0,0,meteorCanvas.width,meteorCanvas.height);
+  }, 180);
+}
+
+/* =========================
+   Visualizer (WebAudio if possible, else simulated)
+   ========================= */
+let audioCtx=null, analyser=null, sourceNode=null, dataArray=null;
+function tryInitAudio(){
+  if (audioCtx) return;
+  try{
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    sourceNode = audioCtx.createMediaElementSource(audioEl);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    sourceNode.connect(analyser);
+    analyser.connect(audioCtx.destination);
+    dataArray = new Uint8Array(analyser.frequencyBinCount);
+    console.log('WebAudio initialized');
+  }catch(e){
+    console.log('WebAudio not available:', e);
+    audioCtx = null; analyser = null; dataArray = null;
+  }
+}
+
+/* visual state */
+let vizEnabled = false;
+let running = false;
+let time = 0;
+let ampTarget = 0.02, ampCurrent = 0.02;
+let bursts = [];
+
+/* smooth noise */
+function smoothNoise(x,seed=0){
+  return (Math.sin(x*0.5 + seed) + Math.sin(x*0.33 - seed*1.3)*0.6 + Math.sin(x*0.13 + seed*2.1)*0.3)/1.9;
+}
+
+function updateAmp(){
+  if (analyser && !audioEl.paused){
+    analyser.getByteFrequencyData(dataArray);
+    // low-frequency energy
+    let sum=0; const len = Math.min(16, dataArray.length);
+    for(let i=0;i<len;i++) sum += dataArray[i];
+    const avg = sum / (len*255);
+    ampTarget = Math.max(0.02, avg*1.8);
+    if (avg > 0.45 && Math.random() < 0.6) createBurst(0.9 + Math.random()*1.3);
+  } else {
+    const base = (playState ? 1.0 : 0.02);
+    ampTarget = base * (0.35 + Math.abs(smoothNoise(time*0.001,7))*0.9 + Math.random()*0.16);
+    if (playState && Math.random() < 0.02) createBurst(0.9 + Math.random()*1.1);
+  }
+}
+
+/* waveform drawing */
+function drawWave(amplitude){
+  const W = wave.width, H = wave.height;
+  wctx.clearRect(0,0,W,H);
+  const mid=H/2, points=120, slice=W/(points-1);
+  const grad = wctx.createLinearGradient(0,0,W,0);
+  grad.addColorStop(0,'rgba(255,23,68,0.95)'); grad.addColorStop(1,'rgba(255,140,170,0.6)');
+  wctx.strokeStyle = grad; wctx.lineWidth = 1.6; wctx.beginPath();
+  for(let i=0;i<points;i++){
+    const x=i*slice;
+    const n = smoothNoise(i*0.12, time*0.002);
+    const y = mid + n * amplitude * (8 + Math.sin(i*0.3 + time*0.01)*5);
+    if(i===0) wctx.moveTo(x,y); else wctx.lineTo(x,y);
+  }
+  wctx.stroke();
+  wctx.lineTo(W,H); wctx.lineTo(0,H); wctx.closePath();
+  wctx.globalAlpha = 0.06; wctx.fillStyle = 'rgba(255,23,68,0.9)'; wctx.fill(); wctx.globalAlpha = 1;
+}
+
+/* circle draw */
+function drawCircle(amplitude){
+  const CW = circle.width, CH = circle.height;
+  circleCtx.clearRect(0,0,CW,CH);
+  const cx=CW/2, cy=CH/2, baseR=Math.min(CW,CH)/2 - 18;
+  const points=160;
+  circleCtx.beginPath();
+  for(let i=0;i<=points;i++){
+    const ang=(i/points)*Math.PI*2;
+    const n=smoothNoise(i*0.18, time*0.003);
+    const r = baseR + n * amplitude * 6;
+    const x = cx + Math.cos(ang)*r;
+    const y = cy + Math.sin(ang)*r;
+    if(i===0) circleCtx.moveTo(x,y); else circleCtx.lineTo(x,y);
+  }
+  circleCtx.closePath();
+  const sg = circleCtx.createLinearGradient(0,0,CW,CH);
+  sg.addColorStop(0,'rgba(255,23,68,0.95)'); sg.addColorStop(1,'rgba(255,160,170,0.45)');
+  circleCtx.strokeStyle = sg; circleCtx.lineWidth=2.6; circleCtx.stroke();
+}
+
+/* brutal overlay */
+function createBurst(str){
+  bursts.push({t:performance.now(), dur: 220 + Math.random()*260, strength: str, x: Math.random()*brut.width, maxR:20 + Math.random()*44});
+}
+function drawBrutal(amplitude){
+  const BW = brut.width, BH = brut.height;
+  bctx.clearRect(0,0,BW,BH);
+  const cols = 14, colW = BW/cols;
+  for(let i=0;i<cols;i++){
+    const n = smoothNoise(i*0.6, time*0.005);
+    const h = 6 + Math.abs(n) * (amplitude*0.8);
+    const x = i*colW + colW*0.12;
+    const alpha = 0.18 + Math.abs(n)*0.45;
+    bctx.fillStyle = `rgba(255,23,68,${alpha})`;
+    bctx.fillRect(x, BH - h, colW*0.75, h);
+  }
+  const now = performance.now();
+  for(let i=bursts.length-1;i>=0;i--){
+    const b = bursts[i];
+    const elapsed = now - b.t;
+    if (elapsed > b.dur){ bursts.splice(i,1); continue; }
+    const p = elapsed / b.dur;
+    const ease = Math.sin(p*Math.PI);
+    const radius = b.maxR * ease * b.strength + amplitude*0.2;
+    const grad = bctx.createRadialGradient(b.x, BH/2, 0, b.x, BH/2, radius*3);
+    grad.addColorStop(0, `rgba(255,200,200,${0.32*(1-p)*b.strength})`);
+    grad.addColorStop(1, 'rgba(255,23,68,0.0)');
+    bctx.fillStyle = grad; bctx.beginPath(); bctx.arc(b.x, BH/2, radius*3, 0, Math.PI*2); bctx.fill();
+    bctx.fillStyle = `rgba(255,120,140,${0.25*(1-p)*b.strength})`;
+    bctx.fillRect(b.x - 6, BH/2 - radius*2, 12, radius*4);
+  }
+}
+
+/* background visual subtle */
+function drawBg(amplitude){
+  const W=bgVizCanvas.width, H=bgVizCanvas.height;
+  bgCtx.clearRect(0,0,W,H);
+  const grd = bgCtx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)/1.2);
+  grd.addColorStop(0, `rgba(255,23,68,${0.02 + amplitude*0.06})`);
+  grd.addColorStop(1, 'rgba(0,0,0,0.0)');
+  bgCtx.fillStyle = grd; bgCtx.fillRect(0,0,W,H);
+
+  bgCtx.globalAlpha = 0.06 + amplitude*0.14;
+  bgCtx.strokeStyle = 'rgba(255,23,68,0.06)';
+  bgCtx.lineWidth = 1;
+  for(let i=0;i<10;i++){
+    const y = ((i*37 + time*0.6) % H);
+    bgCtx.beginPath(); bgCtx.moveTo(0,y); bgCtx.quadraticCurveTo(W/2, y+20, W, y); bgCtx.stroke();
+  }
+  bgCtx.globalAlpha = 1;
+}
+
+/* animate: main loop */
+let raf = null;
+let playState = false;
+function animate(){
+  time++;
+  // background
+  drawStars(); drawNebula();
+  meteorSpawner(); updateMeteors(); drawMeteors();
+  drawRain();
+  // lightning
+  if (lightningEnabled) maybeLightning();
+
+  // visuals
+  if (vizEnabled) {
+    updateAmp();
+    ampCurrent += (ampTarget - ampCurrent) * 0.08;
+    const ampPixels = 12 + ampCurrent * 86;
+    drawWave(ampPixels);
+    drawCircle(ampCurrent*60);
+    drawBrutal(ampCurrent*120);
+    drawBg(ampCurrent);
+  } else {
+    // when disabled, still decay visuals to zero
+    ampTarget = 0.02;
+    ampCurrent += (ampTarget - ampCurrent) * 0.12;
+    drawWave(12); drawCircle(4); drawBrutal(4); drawBg(0.02);
+  }
+
+  raf = requestAnimationFrame(animate);
+}
+
+/* helper wrappers for meteor draw called in animate */
+function drawMeteors(){ updateMeteors(); }
+
+/* control toggles */
+toggleVizBtn.addEventListener('click', ()=>{
+  vizEnabled = !vizEnabled;
+  toggleVizBtn.textContent = `🎚 Visualizer: ${vizEnabled ? 'ON' : 'OFF'}`;
+  if (vizEnabled){
+    tryInitAudio();
+    bgVizCanvas.style.opacity = 1;
+    startVisuals();
+  } else {
+    bgVizCanvas.style.opacity = 0;
+    stopVisuals();
+  }
+});
+
+toggleLightningBtn.addEventListener('click', ()=>{
+  lightningEnabled = !lightningEnabled;
+  toggleLightningBtn.textContent = `⚡ Lightning: ${lightningEnabled ? 'ON' : 'OFF'}`;
+});
+
+/* panel interactions */
+openPanelBtn.addEventListener('click', ()=> { panel.classList.add('open'); panel.setAttribute('aria-hidden','false'); });
+closePanelBtn.addEventListener('click', ()=> closePanel());
+function closePanel(){ panel.classList.remove('open'); panel.setAttribute('aria-hidden','true'); }
+
+/* build track list & quick right column */
+function buildLists(){
+  trackListEl.innerHTML = '';
+  quickEl.innerHTML = '';
+  TRACKS.forEach((t,i)=>{
+    const item = document.createElement('div');
+    item.className = 'track-item';
+    item.innerHTML = `<img src="${t.thumb}" alt=""><div style="flex:1"><div style="font-weight:700">${t.title}</div><div class="small">${t.artist}</div></div><button class="fav" data-i="${i}" style="background:none;border:0;color:#fff;cursor:pointer">♡</button>`;
+    item.addEventListener('click', ()=> loadTrack(i));
+    trackListEl.appendChild(item);
+
+    const q = document.createElement('div');
+    q.style.padding='6px 0';
+    q.innerHTML = `<div style="display:flex;gap:8px;align-items:center"><img src="${t.thumb}" style="width:46px;height:46px;border-radius:8px;object-fit:cover"><div><div style="font-weight:700;font-size:0.95rem">${t.title}</div><div class="small">${t.artist}</div></div></div>`;
+    quickEl.appendChild(q);
+  });
+
+  trackListEl.addEventListener('click', (e)=>{
+    if(e.target.classList.contains('fav')){
+      const idx = Number(e.target.dataset.i);
+      e.target.textContent = (e.target.textContent === '♡') ? '❤️' : '♡';
+    }
+  });
+}
+buildLists();
+
+/* player functions */
+let current = 0;
+function loadTrack(i){
+  current = i;
+  const t = TRACKS[i];
+  coverImg.src = t.thumb; titleEl.textContent = t.title; artistEl.textContent = t.artist;
+  // if t.mp3 provided, set audioEl.src and play
+  if (t.mp3){
+    audioEl.src = t.mp3;
+    audioEl.play().catch(()=>{});
+    tryInitAudio();
+  } else {
+    // no mp3 - simulate playing only
+  }
+  playState = true; playBtn.textContent='⏸';
+  if (vizEnabled) startVisuals();
+  closePanel();
+}
+
+function togglePlay(){
+  if (playState){
+    try{ audioEl.pause(); }catch(e){}
+    playState = false; playBtn.textContent='▶️';
+  } else {
+    if (audioEl.src){ audioEl.play().catch(()=>{}); tryInitAudio(); }
+    playState = true; playBtn.textContent='⏸';
+    if (vizEnabled) startVisuals();
+  }
+}
+function nextTrack(){ current = (current+1)%TRACKS.length; loadTrack(current); }
+function prevTrack(){ current = (current-1+TRACKS.length)%TRACKS.length; loadTrack(current); }
+
+/* visual start/stop */
+function startVisuals(){ if (!running){ running = true; ampTarget = 0.6+Math.random()*0.6; if (!raf) animate(); } }
+function stopVisuals(){ running = false; ampTarget = 0.02; }
+
+/* init rain/meteor spawner */
+function meteorLoop(){
+  meteorSpawner();
+  setTimeout(meteorLoop, 120); // steady spawn pulse
+}
+meteorLoop();
+
+/* main start */
+animate();
+
+/* responsive: resize and re-init */
+window.addEventListener('resize', ()=>{
+  resizeAll();
+  initStars(260);
+  initRain(70);
+});
+
+/* init UI (first track metadata) */
+(function initUI(){
+  coverImg.src = TRACKS[0].thumb;
+  titleEl.textContent = TRACKS[0].title;
+  artistEl.textContent = TRACKS[0].artist;
+  bgVizCanvas.style.opacity = 0;
+  // start small star/nebula animations by RAF already running via animate()
+})();
+</script>
+</body>
+</html>
